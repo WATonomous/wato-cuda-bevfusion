@@ -129,7 +129,13 @@ target_link_libraries(custom_layernorm
 
 
 ########################## libpybev.so ################################
-if(${CMAKE_BUILD_PYTHON} STREQUAL "ON")
+if(DEFINED ENV{USE_Python})
+  set(CMAKE_BUILD_PYTHON $ENV{USE_Python})
+else()
+  set(CMAKE_BUILD_PYTHON "OFF")
+endif()
+
+if("${CMAKE_BUILD_PYTHON}" STREQUAL "ON")
   cuda_add_library(pybev SHARED
     src/python.cpp
   )
