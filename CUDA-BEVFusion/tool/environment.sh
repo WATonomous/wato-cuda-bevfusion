@@ -22,16 +22,14 @@
 
 # export CUDA_VISIBLE_DEVICES=2
 
-export TensorRT_Lib=/path/to/tensorrt/lib
-export TensorRT_Inc=/path/to/tensorrt/include
-export TensorRT_Bin=/path/to/tensorrt/bin
-
-export CUDA_HOME=/usr/local/cuda
-export CUDA_Lib=$CUDA_HOME/lib64
+export TensorRT_Lib=$CONDA_PREFIX/lib
+export TensorRT_Inc=$CONDA_PREFIX/include
+export TensorRT_Bin=$CONDA_PREFIX/bin
+export CUDA_HOME=$CONDA_PREFIX
+export CUDA_Lib=$CUDA_HOME/lib
 export CUDA_Inc=$CUDA_HOME/include
 export CUDA_Bin=$CUDA_HOME/bin
-
-export CUDNN_Lib=/path/to/cudnn/lib
+export CUDNN_Lib=$CONDA_PREFIX/lib
 
 # export TensorRT_Lib=${TENSORRT_LIB}
 # export TensorRT_Inc=${TENSORRT_INCLUDE}
@@ -54,7 +52,7 @@ export DEBUG_MODEL=resnet50int8
 # fp16/int8
 export DEBUG_PRECISION=int8
 export DEBUG_DATA=example-data
-export USE_Python=OFF
+export USE_Python=ON
 
 # check the configuration path
 # clean the configuration status
@@ -91,7 +89,7 @@ if [ "$USE_Python" == "ON" ]; then
     echo Find Python_Soname: $Python_Soname
 fi
 
-export PATH=$TensorRT_Bin:$CUDA_Bin:$PATH
+export PATH=$TensorRT_Bin:$CUDA_Bin:$CUDA_HOME/nvvm/bin:$PATH
 export LD_LIBRARY_PATH=$TensorRT_Lib:$CUDA_Lib:$CUDNN_Lib:$BuildDirectory:$LD_LIBRARY_PATH
 export PYTHONPATH=$BuildDirectory:$PYTHONPATH
 export ConfigurationStatus=Success
