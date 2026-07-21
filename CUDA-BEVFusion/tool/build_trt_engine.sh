@@ -29,7 +29,8 @@ if [ "$ConfigurationStatus" != "Success" ]; then
 fi
 
 # tensorrt version
-# version=`trtexec | grep -m 1 TensorRT | sed -n "s/.*\[TensorRT v\([0-9]*\)\].*/\1/p"`
+version=`trtexec 2>&1 | grep -m 1 TensorRT | sed -n "s/.*\[TensorRT v\([0-9]*\)\].*/\1/p"`
+echo "Detected TensorRT version number: $version"
 
 # resnet50/resnet50-int8/swint-tiny
 base=model/$DEBUG_MODEL
@@ -42,6 +43,14 @@ trtexec_fp16_flags="--fp16"
 trtexec_dynamic_flags="--fp16"
 if [ "$precision" == "int8" ]; then
     trtexec_dynamic_flags="--fp16 --int8"
+fi
+
+io_format_prefix="fp16:"
+if [ ! -z "$version" ] && [ "$version" -ge 100000 ]; then
+    echo "Using TensorRT 10+ settings (no --fp16/--int8 flags, format-only IO formats)"
+    trtexec_fp16_flags=""
+    trtexec_dynamic_flags=""
+    io_format_prefix=""
 fi
 
 function get_onnx_number_io(){
@@ -86,11 +95,11 @@ function compile_trt_model(){
     input_flags="--inputIOFormats="
     output_flags="--outputIOFormats="
     for i in $(seq 1 $number_of_input); do
-        input_flags+=fp16:chw,
+        input_flags+=${io_format_prefix}chw,
     done
 
     for i in $(seq 1 $number_of_output); do
-        output_flags+=fp16:chw,
+        output_flags+=${io_format_prefix}chw,
     done
 
     input_flags=${input_flags%?}
