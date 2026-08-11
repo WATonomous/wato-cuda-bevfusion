@@ -23,6 +23,7 @@
 
 #include <cuda_fp16.h>
 #include <numeric>
+#include <algorithm>
 
 #include "camera-bevpool.hpp"
 #include "common/check.hpp"
@@ -44,7 +45,8 @@ static __global__ void bevpool_half_pack10_kernel(const half* camera_feature, co
                                                   unsigned int out_h, unsigned int out_w, unsigned int ndepth, unsigned int farea,
                                                   half* output_bevfeat) {
   int interval_index = blockIdx.y * blockDim.y + threadIdx.y;
-  int feature_block = threadIdx.x * tile_size;
+  int feature_block_idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+  int feature_block = feature_block_idx * tile_size;
 
   if (interval_index >= n_intervals) return;
   int3 interval = intervals[interval_index];
@@ -115,15 +117,29 @@ class BEVPoolImplement : public BEVPool {
 
     cudaStream_t _stream = static_cast<cudaStream_t>(stream);
 
-    // Compute threads.x as the number of tile blocks needed to cover all channels.
-    int thread_x = (C + tile_size - 1) / tile_size;  // ceil division
-    if (thread_x < 1) thread_x = 1;
-    // Ensure threads per block does not exceed CUDA's 1024 limit.
-    const int max_threads_per_block = 1024;
-    int thread_y = max_threads_per_block / thread_x;
-    if (thread_y < 1) thread_y = 1;
-    dim3 threads(thread_x, thread_y);
-    dim3 blocks(1, int((num_intervals + thread_y - 1) / thread_y));
+    // Determine launch dimensions using device properties so we never exceed limits.
+    int device_id = 0;
+    checkRuntime(cudaGetDevice(&device_id));
+    cudaDeviceProp prop;
+    checkRuntime(cudaGetDeviceProperties(&prop, device_id));
+
+    unsigned int total_feature_blocks = (C + tile_size - 1) / tile_size;  // number of tile groups along channel dim
+
+    // threads.x covers feature blocks per block; cap by device max block dim x
+    unsigned int threads_x = static_cast<unsigned int>(std::min<unsigned int>(total_feature_blocks, static_cast<unsigned int>(prop.maxThreadsDim[0])));
+    if (threads_x == 0) threads_x = 1;
+
+    // threads_y chosen so threads_x * threads_y <= maxThreadsPerBlock and <= prop.maxThreadsDim[1]
+    unsigned int threads_y = static_cast<unsigned int>(prop.maxThreadsPerBlock / threads_x);
+    if (threads_y == 0) threads_y = 1;
+    if (threads_y > static_cast<unsigned int>(prop.maxThreadsDim[1])) threads_y = static_cast<unsigned int>(prop.maxThreadsDim[1]);
+
+    // Compute blocks to cover all feature blocks and intervals
+    unsigned int blocks_x = static_cast<unsigned int>((total_feature_blocks + threads_x - 1) / threads_x);
+    unsigned int blocks_y = static_cast<unsigned int>((num_intervals + threads_y - 1) / threads_y);
+
+    dim3 threads(threads_x, threads_y);
+    dim3 blocks(blocks_x, blocks_y);
 
     checkRuntime(cudaMemsetAsync(output_feature_, 0x00, volumn_output_ * sizeof(half), _stream));
     checkKernel(bevpool_half_pack10_kernel<<<blocks, threads, 0, _stream>>>(
