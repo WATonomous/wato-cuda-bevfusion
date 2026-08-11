@@ -48,7 +48,12 @@ static __global__ void bevpool_half_pack10_kernel(const half* camera_feature, co
 
   if (interval_index >= n_intervals) return;
   int3 interval = intervals[interval_index];
-  float accumulate[tile_size] = {0.0f};
+  float accumulate[tile_size];
+  // initialize accumulator
+  for (int j = 0; j < tile_size; j++) accumulate[j] = 0.0f;
+
+  // If the starting channel index for this thread is beyond available channels, exit early.
+  if (feature_block >= (int)nchannel) return;
 
   for (int i = interval.x; i < interval.y; i++) {
     int indice = indices[i];
@@ -56,19 +61,26 @@ static __global__ void bevpool_half_pack10_kernel(const half* camera_feature, co
     int fm_inner_index = indice % farea;
     float depth_weight = __half2float(depth_weights[indice]);
     unsigned int camera_feature_offset = (camera_index * farea + fm_inner_index) * nchannel + feature_block;
-    combined_half feature = *(combined_half*)(camera_feature + camera_feature_offset);
 
 #pragma unroll
     for (int j = 0; j < tile_size; j++) {
-      // Using fma instead of __hfma can avoids cumulative errors and gives more accurate results.
-      accumulate[j] = fma(__half2float(feature.val[j]), depth_weight, accumulate[j]);
+      int ch = feature_block + j;
+      float feat = 0.0f;
+      if (ch < (int)nchannel) {
+        feat = __half2float(camera_feature[camera_feature_offset + j]);
+      }
+      // Using fma instead of __hfma to avoid cumulative errors and get accurate results.
+      accumulate[j] = fma(feat, depth_weight, accumulate[j]);
     }
   }
 
 #pragma unroll
   for (int j = 0; j < tile_size; j++) {
-    unsigned int output_offset = interval.z + (feature_block + j) * out_h * out_w;
-    output_bevfeat[output_offset] = __float2half(accumulate[j]);
+    int ch = feature_block + j;
+    if (ch < (int)nchannel) {
+      unsigned int output_offset = interval.z + ch * out_h * out_w;
+      output_bevfeat[output_offset] = __float2half(accumulate[j]);
+    }
   }
 }
 
@@ -103,14 +115,20 @@ class BEVPoolImplement : public BEVPool {
 
     cudaStream_t _stream = static_cast<cudaStream_t>(stream);
 
-    int thread_x = C / tile_size;
-    int thread_y = 1024 / thread_x;
+    // Compute threads.x as the number of tile blocks needed to cover all channels.
+    int thread_x = (C + tile_size - 1) / tile_size;  // ceil division
+    if (thread_x < 1) thread_x = 1;
+    // Ensure threads per block does not exceed CUDA's 1024 limit.
+    const int max_threads_per_block = 1024;
+    int thread_y = max_threads_per_block / thread_x;
+    if (thread_y < 1) thread_y = 1;
     dim3 threads(thread_x, thread_y);
     dim3 blocks(1, int((num_intervals + thread_y - 1) / thread_y));
+
     checkRuntime(cudaMemsetAsync(output_feature_, 0x00, volumn_output_ * sizeof(half), _stream));
     checkKernel(bevpool_half_pack10_kernel<<<blocks, threads, 0, _stream>>>(
-        reinterpret_cast<const half*>(camera_feature), reinterpret_cast<const half*>(depth_weights), C,
-        reinterpret_cast<const int3*>(intervals), num_intervals, indices, bev_height_, bev_width_, D, W * H, output_feature_));
+      reinterpret_cast<const half*>(camera_feature), reinterpret_cast<const half*>(depth_weights), C,
+      reinterpret_cast<const int3*>(intervals), num_intervals, indices, bev_height_, bev_width_, D, W * H, output_feature_));
 
     return reinterpret_cast<nvtype::half*>(output_feature_);
   }
