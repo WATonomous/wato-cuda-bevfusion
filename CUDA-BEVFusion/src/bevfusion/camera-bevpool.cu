@@ -138,6 +138,18 @@ class BEVPoolImplement : public BEVPool {
     unsigned int blocks_x = static_cast<unsigned int>((total_feature_blocks + threads_x - 1) / threads_x);
     unsigned int blocks_y = static_cast<unsigned int>((num_intervals + threads_y - 1) / threads_y);
 
+    // If there is no work, zero output and return early.
+    if (num_intervals == 0 || total_feature_blocks == 0) {
+      checkRuntime(cudaMemsetAsync(output_feature_, 0x00, volumn_output_ * sizeof(half), _stream));
+      return reinterpret_cast<nvtype::half*>(output_feature_);
+    }
+
+    // Ensure grid dims are at least 1 and do not exceed device limits.
+    blocks_x = std::max<unsigned int>(1u, blocks_x);
+    blocks_y = std::max<unsigned int>(1u, blocks_y);
+    blocks_x = std::min<unsigned int>(blocks_x, static_cast<unsigned int>(prop.maxGridSize[0]));
+    blocks_y = std::min<unsigned int>(blocks_y, static_cast<unsigned int>(prop.maxGridSize[1]));
+
     dim3 threads(threads_x, threads_y);
     dim3 blocks(blocks_x, blocks_y);
 
