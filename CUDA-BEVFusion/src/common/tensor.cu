@@ -521,7 +521,14 @@ Tensor Tensor::load(const std::string& file, bool device) {
 
   int ndim = head[1];
   int dtypei = head[2];
-  int dims[16];
+  constexpr int max_ndim = 16;
+  int dims[max_ndim];
+
+  if (ndim < 1 || ndim > max_ndim) {
+    printf("This is invalid tensor file %s\n", file.c_str());
+    fclose(f);
+    return Tensor();
+  }
 
   if (fread(dims, 1, ndim * sizeof(int), f) == 0) {
     printf("This is invalid tensor file %s\n", file.c_str());
