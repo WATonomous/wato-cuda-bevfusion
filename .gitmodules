@@ -1,6 +1,6 @@
 [submodule "CUDA-BEVFusion/bevfusion"]
 	path = CUDA-BEVFusion/bevfusion
-	url = https://github.com/mit-han-lab/bevfusion.git
+	url = https://github.com/WATonomous/wato-bevfusion.git
 [submodule "dependencies/pybind11"]
 	path = dependencies/pybind11
 	url = https://github.com/pybind/pybind11.git
@@ -10,3 +10,6 @@
 [submodule "dependencies/dlpack"]
 	path = dependencies/dlpack
 	url = https://github.com/dmlc/dlpack
+[submodule "libraries/cuPCL"]
+	path = libraries/cuPCL
+	url = https://github.com/WATonomous/cuPCL
