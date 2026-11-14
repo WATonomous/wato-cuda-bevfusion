@@ -224,7 +224,7 @@ class NormalizationImplement : public Normalization {
 
     for (int icamera = 0; icamera < param_.num_camera; ++icamera)
       checkRuntime(
-          cudaMemcpyAsync(raw_images_ + icamera * bytes_image, images[icamera], bytes_image, cudaMemcpyHostToDevice, _stream));
+          cudaMemcpyAsync(raw_images_ + icamera * bytes_image, images[icamera], bytes_image, cudaMemcpyDefault, _stream));
 
     cuda_2d_launch(normalize_to_planar_kernel_function, _stream, param_.output_width, param_.output_height, param_.num_camera,
                    sx_, sy_, crop_x_, crop_y_, reinterpret_cast<uchar3*>(raw_images_), param_.image_width, param_.image_height,
