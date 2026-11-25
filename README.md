@@ -156,8 +156,3 @@ stable finite-value filtering, truncation, and FP16 packing with zero sweep time
 Workspace is reused; only the valid-point count is downloaded. Calls on a preprocessor
 instance must be serialized, and the returned device buffer is valid until its next
 call. Raw inputs exceeding the configured capacity throw instead of losing points.
-
-For the model-independent regression test, configure CUDA-BEVFusion with
-`-DBUILD_LIDAR_PREPROCESS_TESTS=ON`, build `test_lidar_preprocess`, then run
-`ctest -R lidar_preprocess --output-on-failure`. Use a CUDA toolkit and architecture
-supported by your GPU. The test does not require TensorRT engines or calibration.
